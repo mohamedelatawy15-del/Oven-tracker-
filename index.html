@@ -1,0 +1,395 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Stability Oven Tracker</title>
+<style>
+/* Layout: summary strip on top, attention list, entry form, then one row per sample sorted by pull-out date. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --ink: #14202b;
+  --muted: #5b6b79;
+  --line: #d5dce3;
+  --accent: #1f4e78;
+  --accent-ink: #ffffff;
+  --ok: #1d7a4a;
+  --ok-bg: #dff3e7;
+  --soon: #8a5a00;
+  --soon-bg: #fdecc4;
+  --bad: #b3261e;
+  --bad-bg: #fbdcd9;
+  --today: #0b5a8f;
+  --today-bg: #d4e8f8;
+  --done: #5b6b79;
+  --done-bg: #e6eaee;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", Arial, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f161d; --surface: #17212b; --surface-2: #1d2935; --ink: #e8eef3; --muted: #9aabb9;
+    --line: #2b3a48; --accent: #6fb1e6; --accent-ink: #0b1620;
+    --ok: #5fd096; --ok-bg: #153a28; --soon: #f2bf5e; --soon-bg: #3d3010;
+    --bad: #ff8a80; --bad-bg: #44201e; --today: #8cc8f5; --today-bg: #14344d;
+    --done: #9aabb9; --done-bg: #243240; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f161d; --surface: #17212b; --surface-2: #1d2935; --ink: #e8eef3; --muted: #9aabb9;
+  --line: #2b3a48; --accent: #6fb1e6; --accent-ink: #0b1620;
+  --ok: #5fd096; --ok-bg: #153a28; --soon: #f2bf5e; --soon-bg: #3d3010;
+  --bad: #ff8a80; --bad-bg: #44201e; --today: #8cc8f5; --today-bg: #14344d;
+  --done: #9aabb9; --done-bg: #243240; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  padding-block: calc(20px + env(safe-area-inset-top, 0px)) 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 30px; letter-spacing: .01em; margin: 0; line-height: 1.1; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.today { font-family: var(--f-data); font-size: 13px; color: var(--muted); }
+h2 { font-family: var(--f-display); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; margin: 0 0 10px; color: var(--muted); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; min-width: 0; }
+.stat b { display: block; font-family: var(--f-data); font-size: 26px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+.stat.hot b { color: var(--bad); }
+.stat.warm b { color: var(--soon); }
+
+.alert { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 12px 14px; }
+.alert ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.alert li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.alert.none { color: var(--muted); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+form.entry { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.f.c2 { grid-column: span 2; } .f.c3 { grid-column: span 3; } .f.c6 { grid-column: span 6; }
+label { font-size: 12px; font-weight: 600; color: var(--muted); }
+input, select { font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; min-width: 0; width: 100%; }
+input[type="number"], input.mono { font-family: var(--f-data); }
+input:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset { font: inherit; font-family: var(--f-data); font-size: 12px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+.preset[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.preview { grid-column: span 6; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; border-top: 1px dashed var(--line); padding-top: 12px; }
+.preview .out { font-family: var(--f-data); font-size: 14px; }
+.preview .out b { font-weight: 500; color: var(--accent); }
+.btn { font: inherit; font-weight: 600; border-radius: 4px; padding: 9px 16px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.btn.danger { border-color: var(--bad); color: var(--bad); background: transparent; }
+.btn.danger.armed { background: var(--bad); color: var(--surface); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.listhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.listhead h2 { margin: 0; }
+.rows { display: flex; flex-direction: column; gap: 10px; }
+.row { background: var(--surface); border: 1px solid var(--line); border-left-width: 5px; border-radius: 6px; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) auto; gap: 10px 16px; align-items: center; }
+.row.s-overdue { border-left-color: var(--bad); } .row.s-today { border-left-color: var(--today); }
+.row.s-soon { border-left-color: var(--soon); } .row.s-oven { border-left-color: var(--ok); }
+.row.s-done { border-left-color: var(--done); opacity: .8; }
+.id { font-family: var(--f-data); font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.dates { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dline { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--f-data); font-size: 13px; font-variant-numeric: tabular-nums; }
+.dline .arrow { color: var(--muted); }
+.bar { position: relative; height: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.bar > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.s-overdue .bar > i { background: var(--bad); } .s-soon .bar > i { background: var(--soon); } .s-done .bar > i { background: var(--done); }
+.bar > u { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .55; }
+.act { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.pill { display: inline-block; font-family: var(--f-data); font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.p-overdue { background: var(--bad-bg); color: var(--bad); } .p-today { background: var(--today-bg); color: var(--today); }
+.p-soon { background: var(--soon-bg); color: var(--soon); } .p-oven { background: var(--ok-bg); color: var(--ok); }
+.p-done { background: var(--done-bg); color: var(--done); }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.note { grid-column: 1 / -1; font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; overflow-wrap: anywhere; }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 6px; padding: 28px 16px; text-align: center; color: var(--muted); }
+.empty b { display: block; color: var(--ink); font-family: var(--f-display); font-size: 18px; margin-bottom: 4px; }
+.banner { background: var(--soon-bg); color: var(--soon); border-radius: 6px; padding: 10px 14px; font-size: 13px; }
+.foot { color: var(--muted); font-size: 12.5px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; font-size: 13px; max-width: calc(100% - 32px); }
+@media (max-width: 700px) {
+  h1 { font-size: 26px; }
+  form.entry { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .f.c2, .f.c3 { grid-column: span 1; } .f.c6, .preview { grid-column: span 2; }
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .act { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .btns { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style></head><body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Stability Oven Tracker</h1>
+      <div class="sub">ASTM D1849 package stability samples: when they went in and when to pull them out.</div>
+    </div>
+    <div class="today" id="todayLabel"></div>
+  </header>
+
+  <div id="dbBanner" class="banner" hidden></div>
+
+  <section class="stats" id="stats" aria-label="Summary"></section>
+  <section id="attention"></section>
+
+  <section class="card" aria-labelledby="addH">
+    <h2 id="addH">Log a sample into the oven</h2>
+    <form class="entry" id="entry" autocomplete="off">
+      <div class="f c2"><label for="fId">Sample ID</label><input id="fId" class="mono" required placeholder="SS-2026-001"></div>
+      <div class="f c2"><label for="fProd">Product / batch</label><input id="fProd" required placeholder="Acrylic matt white, B261003"></div>
+      <div class="f c2"><label for="fIn">Date in</label><input id="fIn" type="date" required></div>
+      <div class="f c2"><label for="fTemp">Oven temp (°C)</label><input id="fTemp" type="number" step="0.5" value="52" required></div>
+      <div class="f c2">
+        <label for="fDays">Storage time (days)</label>
+        <input id="fDays" type="number" min="1" max="365" value="30" required>
+        <div class="presets" id="presets">
+          <button type="button" class="preset" data-d="7">7</button>
+          <button type="button" class="preset" data-d="14">14</button>
+          <button type="button" class="preset" data-d="28">28</button>
+          <button type="button" class="preset" data-d="30">30</button>
+        </div>
+      </div>
+      <div class="f c2"><label for="fChecks">Mid-test checks (days, optional)</label><input id="fChecks" class="mono" placeholder="7, 14"></div>
+      <div class="f c6"><label for="fNote">Notes (optional)</label><input id="fNote" placeholder="Shelf, oven number, control paint batch"></div>
+      <div class="preview">
+        <div class="out" id="preview"></div>
+        <button class="btn" type="submit" id="addBtn">Add to oven log</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <div class="listhead">
+      <h2>Samples</h2>
+      <div class="btns">
+        <button class="btn ghost small" id="enableNotif" type="button">Enable notifications</button>
+        <button class="btn ghost small" id="testNotif" type="button">Send test alert</button>
+      </div>
+    </div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <p class="foot">Alerts fire at 09:00 the day before pull-out, on pull-out day, and on each mid-test check day, even when the app is closed. Pull-out day is date in plus storage days. After storage, condition each can to 23 ± 2 °C before opening (D1849).</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  var samples = [];       // [{id, product, inDate, temp, days, checks:[n], note, pulledOn}]
+  
+  var $ = function (id) { return document.getElementById(id); };
+  var DAY = 86400000;
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function parse(s) { var p = String(s).split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function iso(d) { var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (dd < 10 ? "0" : "") + dd; }
+  function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function today() { var n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+  function diff(a, b) { return Math.round((a - b) / DAY); }
+  function fmt(d) { return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" }); }
+  function plural(n, w) { return n + " " + w + (Math.abs(n) === 1 ? "" : "s"); }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 3200); }
+
+  function info(s) {
+    var t = today(), inD = parse(s.inDate), out = addDays(inD, s.days);
+    var left = diff(out, t), elapsed = Math.max(0, Math.min(s.days, diff(t, inD)));
+    var st, label;
+    if (s.pulledOn) { st = "done"; label = "Pulled out " + fmt(parse(s.pulledOn)); }
+    else if (left < 0) { st = "overdue"; label = "Overdue by " + plural(-left, "day"); }
+    else if (left === 0) { st = "today"; label = "Pull out today"; }
+    else if (left <= 2) { st = "soon"; label = "Due in " + plural(left, "day"); }
+    else { st = "oven"; label = plural(left, "day") + " left"; }
+    var checks = (s.checks || []).map(function (n) { return { n: n, date: addDays(inD, n) }; });
+    var nextCheck = null;
+    if (!s.pulledOn) checks.forEach(function (c) { var d = diff(c.date, t); if (d >= 0 && (!nextCheck || d < nextCheck.d)) nextCheck = { n: c.n, date: c.date, d: d }; });
+    return { inD: inD, out: out, left: left, elapsed: elapsed, st: st, label: label, checks: checks, nextCheck: nextCheck };
+  }
+
+  var order = { overdue: 0, today: 1, soon: 2, oven: 3, done: 4 };
+  function sorted() {
+    return samples.map(function (s) { return { s: s, i: info(s) }; }).sort(function (a, b) {
+      if (order[a.i.st] !== order[b.i.st]) return order[a.i.st] - order[b.i.st];
+      return a.i.out - b.i.out;
+    });
+  }
+
+  function renderStats(list) {
+    var active = list.filter(function (x) { return x.i.st !== "done"; });
+    var due = list.filter(function (x) { return x.i.st === "today" || x.i.st === "soon"; }).length;
+    var over = list.filter(function (x) { return x.i.st === "overdue"; }).length;
+    var next = active.slice().sort(function (a, b) { return a.i.out - b.i.out; })[0];
+    $("stats").innerHTML =
+      '<div class="stat"><b>' + active.length + '</b><span>in the oven</span></div>' +
+      '<div class="stat' + (due ? " warm" : "") + '"><b>' + due + '</b><span>due today or within 2 days</span></div>' +
+      '<div class="stat' + (over ? " hot" : "") + '"><b>' + over + '</b><span>overdue</span></div>' +
+      '<div class="stat"><b style="font-size:18px;padding-top:6px">' + (next ? esc(next.s.id) : "None") + '</b><span>' + (next ? "next out " + esc(fmt(next.i.out)) : "nothing waiting") + '</span></div>';
+  }
+
+  function renderAttention(list) {
+    var items = [];
+    list.forEach(function (x) {
+      if (x.i.st === "overdue" || x.i.st === "today" || x.i.st === "soon")
+        items.push('<li><span class="pill p-' + x.i.st + '">' + esc(x.i.label) + '</span><span class="id">' + esc(x.s.id) + '</span><span class="meta">' + esc(x.s.product) + '</span></li>');
+      if (x.i.nextCheck && x.i.nextCheck.d <= 1)
+        items.push('<li><span class="pill p-today">Mid-test check ' + (x.i.nextCheck.d === 0 ? "today" : "tomorrow") + '</span><span class="id">' + esc(x.s.id) + '</span><span class="meta">day ' + x.i.nextCheck.n + ' inspection</span></li>');
+    });
+    $("attention").innerHTML = items.length
+      ? '<div class="alert"><h2>Needs attention</h2><ul>' + items.join("") + '</ul></div>'
+      : '<div class="alert none">Nothing to pull out or inspect right now.</div>';
+  }
+
+  function renderRows(list) {
+    if (!list.length) {
+      $("rows").innerHTML = '<div class="empty"><b>No samples in the oven yet</b>Fill in the form above and add your first sample. Its pull-out date appears here.</div>';
+      return;
+    }
+    $("rows").innerHTML = list.map(function (x) {
+      var s = x.s, i = x.i, pct = Math.round(100 * i.elapsed / s.days);
+      var ticks = i.checks.map(function (c) { return '<u style="left:' + Math.min(99, Math.round(100 * c.n / s.days)) + '%" title="Check, day ' + c.n + '"></u>'; }).join("");
+      var chk = i.checks.length ? '<div class="dline"><span class="arrow">checks</span>' + i.checks.map(function (c) { return '<span>d' + c.n + ' ' + esc(c.date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + '</span>'; }).join("") + '</div>' : "";
+      var acts = s.pulledOn
+        ? '<button class="btn ghost small" data-act="undo" data-id="' + esc(s.id) + '" type="button">Undo</button>'
+        : '<button class="btn small" data-act="pull" data-id="' + esc(s.id) + '" type="button">Mark pulled out</button>';
+      return '<article class="row s-' + i.st + '">' +
+        '<div><div class="id">' + esc(s.id) + '</div><div class="meta">' + esc(s.product) + '</div><div class="meta">' + esc(s.temp) + ' °C for ' + plural(s.days, "day") + '</div></div>' +
+        '<div class="dates"><div class="dline"><span>In ' + esc(fmt(i.inD)) + '</span><span class="arrow">→</span><span>Out ' + esc(fmt(i.out)) + '</span></div>' +
+        '<div class="bar" role="img" aria-label="' + pct + ' percent of storage time elapsed"><i style="width:' + pct + '%"></i>' + ticks + '</div>' + chk + '</div>' +
+        '<div class="act"><span class="pill p-' + i.st + '">' + esc(i.label) + '</span><div class="btns">' + acts +
+        '<button class="btn danger small" data-act="del" data-id="' + esc(s.id) + '" type="button">Delete</button></div></div>' +
+        (s.note ? '<div class="note">' + esc(s.note) + '</div>' : '') + '</article>';
+    }).join("");
+  }
+
+  function render() {
+    $("todayLabel").textContent = "Today: " + fmt(today());
+    var list = sorted();
+    renderStats(list); renderAttention(list); renderRows(list);
+  }
+
+  function updatePreview() {
+    var inV = $("fIn").value, days = parseInt($("fDays").value, 10);
+    if (!inV || !days || days < 1) { $("preview").innerHTML = "Pick a date in and storage days to see the pull-out date."; return; }
+    var out = addDays(parse(inV), days);
+    $("preview").innerHTML = "Pull out on <b>" + esc(fmt(out)) + "</b>";
+    var ps = document.querySelectorAll(".preset");
+    for (var k = 0; k < ps.length; k++) ps[k].setAttribute("aria-pressed", String(+ps[k].getAttribute("data-d") === days));
+  }
+
+  function nextId() {
+    var y = new Date().getFullYear(), n = samples.length + 1, id;
+    do { id = "SS-" + y + "-" + (n < 10 ? "00" : n < 100 ? "0" : "") + n; n++; } while (samples.some(function (s) { return s.id === id; }));
+    return id;
+  }
+
+  function safeId(raw) { return raw.trim().replace(/[^A-Za-z0-9_.~:@+-]/g, "-").replace(/^[.]+$/, "x").slice(0, 120); }
+
+  $("entry").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var id = safeId($("fId").value);
+    if (!id) return;
+    if (samples.some(function (s) { return s.id === id; })) { toast("That sample ID is already in the log."); return; }
+    var checks = $("fChecks").value.split(/[\s,;]+/).map(function (v) { return parseInt(v, 10); }).filter(function (n, i, a) { return n > 0 && a.indexOf(n) === i; }).sort(function (a, b) { return a - b; });
+    var days = parseInt($("fDays").value, 10);
+    checks = checks.filter(function (n) { return n < days; });
+    var s = { id: id, product: $("fProd").value.trim(), inDate: $("fIn").value, temp: parseFloat($("fTemp").value), days: days, checks: checks, note: $("fNote").value.trim(), pulledOn: "" };
+    samples.push(s); persist(); render();
+    $("addBtn").disabled = true;
+    Promise.resolve().then(function () {
+      toast("Added " + s.id + ". Pull out " + fmt(addDays(parse(s.inDate), s.days)) + ".");
+      $("fProd").value = ""; $("fChecks").value = ""; $("fNote").value = ""; $("fId").value = nextId();
+    }).catch(function (err) {
+      toast("Could not save: " + ((err && err.message) || "unknown error"));
+    }).then(function () { $("addBtn").disabled = false; });
+  });
+
+  ["fIn", "fDays"].forEach(function (id) { $(id).addEventListener("input", updatePreview); });
+  $("presets").addEventListener("click", function (e) {
+    var b = e.target.closest(".preset"); if (!b) return;
+    $("fDays").value = b.getAttribute("data-d"); updatePreview();
+  });
+
+  var armed = null;
+  $("rows").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-act]"); if (!b) return;
+    var id = b.getAttribute("data-id"), act = b.getAttribute("data-act");
+    var s = samples.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+    if (act === "del") {
+      if (armed !== id) { armed = id; b.textContent = "Confirm delete"; b.classList.add("armed"); setTimeout(function () { armed = null; if (b.isConnected) { b.textContent = "Delete"; b.classList.remove("armed"); } }, 3500); return; }
+      armed = null;
+      samples = samples.filter(function (x) { return x.id !== id; }); persist(); render();
+      return;
+    }
+    var patch = act === "pull" ? { pulledOn: iso(today()) } : { pulledOn: "" };
+    s.pulledOn = patch.pulledOn; persist(); render();
+    if (act === "pull") toast(id + " marked pulled out. Condition to 23 ± 2 °C before opening.");
+  });
+
+  $("fIn").value = iso(today());
+  $("fId").value = nextId();
+  updatePreview(); render();
+
+  var KEY = "ovenTracker.samples.v1";
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(samples)); } catch (e) { toast("Could not save to this device."); }
+    scheduleAlerts();
+  }
+  function load() {
+    try { var v = JSON.parse(localStorage.getItem(KEY) || "[]"); if (Array.isArray(v)) samples = v; } catch (e) { samples = []; }
+  }
+
+  var LN = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) || null;
+  function at9(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0); }
+  function scheduleAlerts() {
+    if (!LN) return Promise.resolve();
+    var now = new Date(), list = [], n = 1;
+    function add(date, title, body) { var when = at9(date); if (when > now) list.push({ id: n++, title: title, body: body, schedule: { at: when, allowWhileIdle: true } }); }
+    samples.filter(function (s) { return !s.pulledOn; }).forEach(function (s) {
+      var inD = parse(s.inDate);
+      add(addDays(inD, s.days - 1), "Pull out tomorrow: " + s.id, s.product + " (" + s.temp + " C, " + s.days + " days)");
+      add(addDays(inD, s.days), "PULL OUT TODAY: " + s.id, s.product + ". Condition to 23 +/- 2 C before opening.");
+      (s.checks || []).forEach(function (c) { add(addDays(inD, c), "Check " + s.id + " (day " + c + ")", s.product); });
+    });
+    return LN.getPending().then(function (p) {
+      return p.notifications && p.notifications.length ? LN.cancel({ notifications: p.notifications }) : null;
+    }).then(function () { return list.length ? LN.schedule({ notifications: list }) : null; })
+      .catch(function () { toast("Could not schedule alerts. Check notification permission."); });
+  }
+  function askPermission() {
+    if (!LN) { toast("Notifications work only in the installed app."); return Promise.resolve(false); }
+    return LN.requestPermissions().then(function (r) {
+      var ok = r && r.display === "granted";
+      toast(ok ? "Notifications enabled." : "Notifications are blocked. Allow them in Android settings.");
+      if (ok) scheduleAlerts();
+      return ok;
+    });
+  }
+  $("enableNotif").addEventListener("click", askPermission);
+  $("testNotif").addEventListener("click", function () {
+    if (!LN) { toast("Test alerts work only in the installed app."); return; }
+    askPermission().then(function (ok) {
+      if (!ok) return;
+      LN.schedule({ notifications: [{ id: 9999, title: "Oven Tracker test", body: "Alerts are working.", schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true } }] });
+      toast("Test alert in 5 seconds. You can close the app.");
+    });
+  });
+
+  load();
+  $("fId").value = nextId();
+  render();
+  if (LN) { LN.checkPermissions().then(function (r) { if (r.display !== "granted") askPermission(); else scheduleAlerts(); }); }
+  else { $("dbBanner").textContent = "Running in a browser: your log is saved on this device, but alerts need the installed app."; $("dbBanner").hidden = false; }
+
+  setInterval(function () { if (document.visibilityState === "visible") render(); }, 60 * 60 * 1000);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") render(); });
+})();
+</script>
+</body></html>
